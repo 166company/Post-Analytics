@@ -1,0 +1,44 @@
+# ─── Həssas Məlumatlar ────────────────────────────────────────────────────────
+# API tokenləri və şifrələr — HEÇ VAXT commit etmə!
+.env
+.env.local
+.env.*.local
+
+# ─── Sistem Faylları ──────────────────────────────────────────────────────────
+# macOS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Windows
+Thumbs.db
+desktop.ini
+
+# Linux
+*~
+
+# ─── IDE / Redaktor ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ─── Node.js (əgər gələcəkdə əlavə olunsa) ───────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ─── Log Faylları ─────────────────────────────────────────────────────────────
+*.log
+logs/
+
+# ─── Claude Code ──────────────────────────────────────────────────────────────
+.claude/
