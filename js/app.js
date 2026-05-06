@@ -78,33 +78,73 @@ function getPageColor(name, idx = 0) {
   return _FALLBACK[idx % _FALLBACK.length];
 }
 
+// ─── Server API Köməkçiləri ──────────────────────────────────────────────────
+// Server işləyirsə /api/config istifadə et, yoxdursa localStorage fallback
+
+async function serverGetConfig() {
+  try {
+    const res = await fetch('/api/config', { cache: 'no-store' });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+async function serverSaveConfig(data) {
+  try {
+    await fetch('/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+  } catch { /* server yoxdursa keç */ }
+}
+
+async function serverClearConfig() {
+  try {
+    await fetch('/api/config', { method: 'DELETE' });
+  } catch { /* keç */ }
+}
+
 // ─── Başlanğıc ───────────────────────────────────────────────────────────────
-function init() {
-  const savedToken = localStorage.getItem('meta_token');
-
-  const savedPages = localStorage.getItem('meta_managed_pages');
-  if (savedPages) {
-    try {
-      const pages = JSON.parse(savedPages);
-      state.managedPages = pages;
-      pages.forEach(p => {
-        if (p.ig_id)    state.igIds[p.id]    = p.ig_id;
-        if (p.photo)    state.pagePhotos[p.id] = p.photo;
-      });
-      renderPagesList(pages, true);
-      renderPageChips();
-    } catch { /* ignore */ }
-  }
-
-  if (savedToken) {
-    state.userToken = savedToken;
-    showTokenConnectedView(savedToken);
-  } else {
-    showTokenSetupView();
-  }
-
+async function init() {
   applyQuickRange(30);
   attachEventListeners();
+  showTokenSetupView(); // default — server cavab verənə qədər
+
+  // Server config-dən yüklə (bütün kompüterlərdə eyni məlumat)
+  const serverCfg = await serverGetConfig();
+
+  let token = null;
+  let pages = null;
+
+  if (serverCfg && serverCfg.token) {
+    // Server cavab verdi — server məlumatını istifadə et
+    token = serverCfg.token;
+    pages = serverCfg.pages || null;
+    // localStorage-ı da yenilə (offline fallback üçün)
+    localStorage.setItem('meta_token', token);
+    if (pages) localStorage.setItem('meta_managed_pages', JSON.stringify(pages));
+  } else {
+    // Server yoxdur — localStorage fallback
+    token = localStorage.getItem('meta_token');
+    const savedPages = localStorage.getItem('meta_managed_pages');
+    if (savedPages) { try { pages = JSON.parse(savedPages); } catch { /* ignore */ } }
+  }
+
+  if (pages && pages.length) {
+    state.managedPages = pages;
+    pages.forEach(p => {
+      if (p.ig_id)  state.igIds[p.id]     = p.ig_id;
+      if (p.photo)  state.pagePhotos[p.id] = p.photo;
+    });
+    renderPagesList(pages, true);
+    renderPageChips();
+  }
+
+  if (token) {
+    state.userToken = token;
+    showTokenConnectedView(token);
+  }
 }
 
 function showTokenSetupView() {
@@ -133,8 +173,11 @@ function attachEventListeners() {
 
   dom.testConnection.addEventListener('click', handleTestAndDiscover);
   dom.discoverPages.addEventListener('click', handleDiscoverPages);
-  dom.editToken.addEventListener('click', () => {
+  dom.editToken.addEventListener('click', async () => {
+    await serverClearConfig();
     localStorage.removeItem('meta_token');
+    localStorage.removeItem('meta_managed_pages');
+    state.userToken = '';
     if (dom.accessToken) dom.accessToken.value = '';
     resetPagesList();
     renderPageChips();
@@ -245,7 +288,8 @@ async function handleTestAndDiscover() {
   setLoading(true, 'Bağlantı yoxlanılır...');
   try {
     const me = await testApiConnection(token);
-    // Token keçərlidir — localStorage-a saxla
+    // Token keçərlidir — server + localStorage-a saxla
+    await serverSaveConfig({ token });
     localStorage.setItem('meta_token', token);
     state.userToken = token;
     showToast('Bağlantı Uğurlu', `Giriş edildi: ${me.name || me.id}`, 'success');
@@ -283,11 +327,13 @@ async function discoverAndRenderPages(token) {
   });
 
   state.managedPages = pages;
-  localStorage.setItem('meta_managed_pages',
-    JSON.stringify(pages.map(({ id, name, ig_id }) => ({
-      id, name, ig_id,
-      photo: state.pagePhotos[id]
-    }))));
+  const pagesToSave = pages.map(({ id, name, ig_id }) => ({
+    id, name, ig_id,
+    photo: state.pagePhotos[id]
+  }));
+  localStorage.setItem('meta_managed_pages', JSON.stringify(pagesToSave));
+  // Server-ə də saxla — bütün kompüterlər üçün sinxronizasiya
+  await serverSaveConfig({ token, pages: pagesToSave });
 
   renderPagesList(pages);
   renderPageChips();

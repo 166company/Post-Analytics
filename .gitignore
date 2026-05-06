@@ -40,5 +40,8 @@ yarn-error.log*
 *.log
 logs/
 
+# ─── Server Config (saxlanmış token — commit etmə!) ──────────────────────────
+config.json
+
 # ─── Claude Code ──────────────────────────────────────────────────────────────
 .claude/
