@@ -205,11 +205,12 @@ function attachEventListeners() {
       if      (r === 'this-month') applyThisMonth();
       else if (r === 'last-month') applyLastMonth();
       else applyQuickRange(parseInt(btn.dataset.days, 10));
+      autoFetch();
     });
   });
 
-  dom.dateFrom.addEventListener('change', clearQuickActive);
-  dom.dateTo.addEventListener('change', clearQuickActive);
+  dom.dateFrom.addEventListener('change', () => { clearQuickActive(); autoFetch(); });
+  dom.dateTo.addEventListener('change',   () => { clearQuickActive(); autoFetch(); });
 
   dom.fetchData.addEventListener('click', handleFetchData);
 
@@ -220,6 +221,14 @@ function attachEventListeners() {
   dom.tableHeaders.forEach(th => {
     th.addEventListener('click', () => handleTableSort(th.dataset.col));
   });
+}
+
+// ─── Avtomatik Yüklə ─────────────────────────────────────────────────────────
+// Tarix dəyişdikdə yalnız əvvəlcədən data yüklənibsə yenidən çək
+function autoFetch() {
+  if (!state.managedPages.length || !Object.keys(state.posts).length) return;
+  if (state.isLoading) return;
+  handleFetchData();
 }
 
 // ─── Light / Dark Tema ───────────────────────────────────────────────────────
