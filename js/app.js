@@ -117,18 +117,31 @@ async function init() {
   let token = null;
   let pages = null;
 
+  const localToken = localStorage.getItem('meta_token');
+  let localPages = null;
+  try {
+    const lp = localStorage.getItem('meta_managed_pages');
+    if (lp) localPages = JSON.parse(lp);
+  } catch { /* ignore */ }
+
   if (serverCfg && serverCfg.token) {
     // Server cavab verdi — server məlumatını istifadə et
     token = serverCfg.token;
     pages = serverCfg.pages || null;
-    // localStorage-ı da yenilə (offline fallback üçün)
     localStorage.setItem('meta_token', token);
     if (pages) localStorage.setItem('meta_managed_pages', JSON.stringify(pages));
   } else {
-    // Server yoxdur — localStorage fallback
-    token = localStorage.getItem('meta_token');
-    const savedPages = localStorage.getItem('meta_managed_pages');
-    if (savedPages) { try { pages = JSON.parse(savedPages); } catch { /* ignore */ } }
+    // Server boşdur amma localStorage-da token var → serverə sinxronlaşdır
+    token = localToken;
+    pages = localPages;
+    if (token) {
+      // Bu brauzer əvvəllər token saxlayıb — onu serverə yazırıq ki
+      // digər brauzerlər/kompüterlər də avtomatik oxusun
+      serverSaveConfig({
+        token,
+        pages: pages || []
+      });
+    }
   }
 
   if (pages && pages.length) {
