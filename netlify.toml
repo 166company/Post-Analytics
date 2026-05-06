@@ -2,9 +2,3 @@
   publish   = "."
   command   = "npm install"
   functions = "netlify/functions"
-
-# /api/config → Netlify Function
-[[redirects]]
-  from   = "/api/config"
-  to     = "/.netlify/functions/config"
-  status = 200
