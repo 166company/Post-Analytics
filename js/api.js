@@ -506,36 +506,35 @@ async function fetchInsightsForTopPosts(topPosts, paidMap = {}) {
       results[post.id] = {};
       const r = results[post.id];
 
-      // ── Həmişə işləyən metriklər ──────────────────────────────────────────
-      Object.assign(r, await tryMetric(post.id, 'reach,saved,shares', token));
+      // Bütün sorğuları paralel işlət — ardıcıl yox
+      const [baseData, playsData, videoData, imprData, imprPaidData, totIntData, engData] =
+        await Promise.allSettled([
+          tryMetric(post.id, 'reach,saved,shares', token),
+          post.type === 'reels' ? tryMetric(post.id, 'ig_reels_aggregated_all_plays_count', token) : Promise.resolve({}),
+          post.type === 'other' ? tryMetric(post.id, 'video_views', token) : Promise.resolve({}),
+          tryMetric(post.id, 'impressions', token),
+          fetch(`${META_API_BASE}/${post.id}/insights?metric=impressions,reach&breakdown=source_type&period=lifetime&access_token=${token}`).then(res => res.ok ? res.json() : null).catch(() => null),
+          fetch(`${META_API_BASE}/${post.id}/insights?metric=total_interactions&breakdown=source_type&period=lifetime&access_token=${token}`).then(res => res.ok ? res.json() : null).catch(() => null),
+          fetch(`${META_API_BASE}/${post.id}/insights?metric=likes,comments,shares,saved&breakdown=source_type&period=lifetime&access_token=${token}`).then(res => res.ok ? res.json() : null).catch(() => null),
+        ]);
 
-      // ── Baxış sayı — post tipinə görə ──────────────────────────────────
-      // Hər metrik ayrı sorğuda — biri fail etsə digərləri zərər görmür
-      //
-      // Reels: ig_reels_aggregated_all_plays_count (yeni) → plays (köhnə)
-      if (post.type === 'reels') {
-        const plays = await tryMetric(post.id, 'ig_reels_aggregated_all_plays_count', token);
-        if (plays.ig_reels_aggregated_all_plays_count > 0) {
-          r.plays = plays.ig_reels_aggregated_all_plays_count;
-        } else {
-          Object.assign(r, await tryMetric(post.id, 'plays', token));
+      if (baseData.status === 'fulfilled')  Object.assign(r, baseData.value);
+      if (imprData.status  === 'fulfilled')  Object.assign(r, imprData.value);
+      if (videoData.status === 'fulfilled')  Object.assign(r, videoData.value);
+
+      // Reels plays
+      if (post.type === 'reels' && playsData.status === 'fulfilled') {
+        const pl = playsData.value;
+        if ((pl.ig_reels_aggregated_all_plays_count || 0) > 0) {
+          r.plays = pl.ig_reels_aggregated_all_plays_count;
+        } else if ((pl.plays || 0) > 0) {
+          r.plays = pl.plays;
         }
       }
-      // Video (reel olmayan): video_views
-      if (post.type === 'other') {
-        Object.assign(r, await tryMetric(post.id, 'video_views', token));
-      }
-      // Foto / carousel + bütün tiplər üçün fallback: impressions
-      const impr = await tryMetric(post.id, 'impressions', token);
-      Object.assign(r, impr); // mövcuddursa əlavə et, yoxdursa narahatlıq yoxdur
 
-      // ── Paid data — Business Suite ilə eyni mənbə ────────────────────────
-      // Business Suite Content → "Marketing Channel: Paid" filtri
-      // Instagram Graph API: breakdown=source_type → PAID hissə = "from ads"
-
-      // Köməkçi: source_type=PAID dəyərini çıxar
+      // Paid data köməkçisi
       function getPaid(apiData, metricName) {
-        const m = (apiData.data || []).find(x => x.name === metricName);
+        const m = (apiData?.data || []).find(x => x.name === metricName);
         if (!m) return { total: 0, paid: 0 };
         const bds = m.total_value?.breakdowns?.[0]?.results || [];
         let paid = 0;
@@ -545,59 +544,32 @@ async function fetchInsightsForTopPosts(topPosts, paidMap = {}) {
         return { total: m.total_value?.value || 0, paid };
       }
 
-      // Sorğu 1: impressions + reach — views "from ads" üçün
-      try {
-        const rImpr = await fetch(
-          `${META_API_BASE}/${post.id}/insights?metric=impressions,reach&breakdown=source_type&period=lifetime&access_token=${token}`
-        );
-        if (rImpr.ok) {
-          const dImpr = await rImpr.json();
-          const impr = getPaid(dImpr, 'impressions');
-          const rch  = getPaid(dImpr, 'reach');
-          r.paid_impressions  = impr.paid;
-          r.total_impressions = impr.total || r.impressions || 0;
-          r.reach_paid        = rch.paid;
-          r._paid_ratio = r.total_impressions > 0
-            ? r.paid_impressions / r.total_impressions : 0;
-        }
-      } catch { /* keç */ }
+      if (imprPaidData.status === 'fulfilled' && imprPaidData.value) {
+        const dImpr = imprPaidData.value;
+        const impr  = getPaid(dImpr, 'impressions');
+        const rch   = getPaid(dImpr, 'reach');
+        r.paid_impressions  = impr.paid;
+        r.total_impressions = impr.total || r.impressions || 0;
+        r.reach_paid        = rch.paid;
+        r._paid_ratio = r.total_impressions > 0 ? r.paid_impressions / r.total_impressions : 0;
+      }
 
-      // Sorğu 2: total_interactions — Business Suite "Interactions from ads"
-      // Bu əsas paid engagement metrikasıdır
-      try {
-        const rTot = await fetch(
-          `${META_API_BASE}/${post.id}/insights?metric=total_interactions&breakdown=source_type&period=lifetime&access_token=${token}`
-        );
-        if (rTot.ok) {
-          const dTot = await rTot.json();
-          const tot  = getPaid(dTot, 'total_interactions');
-          r.total_interactions_total = tot.total;
-          r.total_interactions_paid  = tot.paid;   // Business Suite "4 from ads"
-        }
-      } catch { /* keç */ }
+      if (totIntData.status === 'fulfilled' && totIntData.value) {
+        const tot = getPaid(totIntData.value, 'total_interactions');
+        r.total_interactions_total = tot.total;
+        r.total_interactions_paid  = tot.paid;
+      }
 
-      // Sorğu 3: hər metrik ayrıca breakdown — Business Suite "Likes: 94 (4 from ads)"
-      // likes, comments, shares, saved üçün source_type breakdown cəhdi
-      try {
-        const rEngage = await fetch(
-          `${META_API_BASE}/${post.id}/insights?metric=likes,comments,shares,saved&breakdown=source_type&period=lifetime&access_token=${token}`
-        );
-        if (rEngage.ok) {
-          const dEngage = await rEngage.json();
-          const lk = getPaid(dEngage, 'likes');
-          const cm = getPaid(dEngage, 'comments');
-          const sh = getPaid(dEngage, 'shares');
-          const sv = getPaid(dEngage, 'saved');
-          r.likes_paid    = lk.paid;
-          r.comments_paid = cm.paid;
-          r.shares_paid   = sh.paid;
-          r.saved_paid    = sv.paid;
-          r.likes_total   = lk.total;
-          r.comments_total = cm.total;
-          r.shares_total   = sh.total;
-          r.saved_total    = sv.total;
-        }
-      } catch { /* API bu metrikləri breakdown ilə dəstəkləmirsə ratio istifadə ediləcək */ }
+      if (engData.status === 'fulfilled' && engData.value) {
+        const lk = getPaid(engData.value, 'likes');
+        const cm = getPaid(engData.value, 'comments');
+        const sh = getPaid(engData.value, 'shares');
+        const sv = getPaid(engData.value, 'saved');
+        r.likes_paid     = lk.paid;   r.likes_total     = lk.total;
+        r.comments_paid  = cm.paid;   r.comments_total  = cm.total;
+        r.shares_paid    = sh.paid;   r.shares_total    = sh.total;
+        r.saved_paid     = sv.paid;   r.saved_total     = sv.total;
+      }
     })
   );
 

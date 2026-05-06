@@ -129,8 +129,14 @@ html.dark .pg-perm   { background: #2a2408; border-color: #b45309; color: #fcd34
 
 html.dark .toast     { background: var(--bg-secondary); border-color: var(--border); box-shadow: 0 8px 32px rgba(0,0,0,.6); }
 
-html.dark .pages-list     { background: var(--bg-tertiary); border-color: var(--border); }
+html.dark .pages-list       { background: var(--bg-tertiary); border-color: var(--border); }
 html.dark .pages-select-bar { background: #252750; }
+
+html.dark .token-status-badge   { background: rgba(74,222,128,.1); border-color: rgba(74,222,128,.25); }
+html.dark .token-connected-row  { background: rgba(74,222,128,.07); border-color: rgba(74,222,128,.2); }
+html.dark .page-chip            { background: var(--bg-tertiary); border-color: var(--border); }
+html.dark .page-chip.active     { background: var(--yellow-bg); border-color: var(--yellow); }
+html.dark .page-chip-logo       { border-color: var(--border); }
 html.dark .cb-label:hover { background: var(--bg-primary); }
 
 html.dark .n-zero      { color: var(--text-mute); }
@@ -316,13 +322,13 @@ html.dark        .icon-sun  { display: none; }
   padding: 14px 22px;
   display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap;
   box-shadow: var(--shadow-sm);
-  /* Sticky — header-in altında sabitlənir */
   position: sticky;
   top: var(--header-h);
   z-index: 90;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
+.date-filter > .page-selector-bar { order: -1; flex-basis: 100%; }
 .quick-buttons { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; min-width: 0; }
 .quick-btn {
   padding: 6px 13px;
@@ -590,6 +596,77 @@ html.dark        .icon-sun  { display: none; }
 .page-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .page-id { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-mute); flex-shrink: 0; }
 .pages-empty { padding: 14px; font-size: 12px; color: var(--text-mute); text-align: center; line-height: 1.5; }
+
+/* ─── Token Status Badge ─────────────────────────────── */
+.token-status-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px;
+  background: rgba(22,163,74,.12); border: 1px solid rgba(22,163,74,.3);
+  color: var(--success); font-size: 12px; font-weight: 700;
+}
+
+/* ─── Token Connected Row ────────────────────────────── */
+.token-connected-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  padding: 12px 16px;
+  background: rgba(22,163,74,.07);
+  border: 1px solid rgba(22,163,74,.2);
+  border-radius: var(--radius-sm);
+}
+.token-connected-info {
+  display: flex; align-items: center; gap: 12px; color: var(--success);
+}
+.token-connected-title { font-size: 14px; font-weight: 700; color: var(--success); }
+.token-connected-sub   { font-size: 11px; color: var(--text-mute); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+.btn-sm { padding: 6px 12px; font-size: 12px; }
+
+/* ─── Sticky Filterdəki Səhifə Chipləri ─────────────── */
+.page-selector-bar {
+  width: 100%;
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+  min-width: 0;
+}
+.page-chips-label {
+  font-size: 11px; font-weight: 700; color: var(--text-mute);
+  text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; flex-shrink: 0;
+}
+.page-chips-scroll {
+  display: flex; gap: 6px; overflow-x: auto; flex: 1; min-width: 0;
+  padding-bottom: 2px;
+}
+.page-chips-scroll::-webkit-scrollbar { height: 3px; }
+.page-chips-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.page-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 5px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  background: var(--bg-tertiary);
+  cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  font-family: 'Manrope', sans-serif; font-size: 12px; font-weight: 600;
+  color: var(--text-mute);
+  transition: all var(--transition);
+  opacity: .55;
+}
+.page-chip.active {
+  border-color: var(--yellow);
+  background: var(--yellow-bg);
+  color: var(--text);
+  opacity: 1;
+}
+.page-chip:hover { opacity: 1; border-color: var(--yellow-dim); }
+.page-chip-logo {
+  width: 20px; height: 20px;
+  border-radius: 50%; object-fit: cover;
+  border: 1px solid var(--border); flex-shrink: 0;
+  background: var(--bg-tertiary);
+}
+.page-chip-name { max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
 
 /* ─── Yükləmə Ekranı ─────────────────────────────────── */
 .loading-overlay {

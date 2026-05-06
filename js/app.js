@@ -3,13 +3,14 @@
 const state = {
   posts:              {},
   pageNames:          {},
+  pagePhotos:         {},   // { pageId: photoUrl }
   pageTokens:         {},
   igIds:              {},
   igUsernames:        {},
   usernameToPageId:   {},
   managedPages:       [],
-  adAccountIds:       [],   // Meta Ads Manager hesab ID-ləri — paid data üçün
-  userToken:          '',   // İstifadəçinin User Access Token-i (ads_read üçün)
+  adAccountIds:       [],
+  userToken:          '',
   tableData:          [],
   tableSortCol:       'total',
   tableSortDir:       'desc',
@@ -22,30 +23,35 @@ const state = {
 const el = id => document.getElementById(id);
 
 const dom = {
-  configPanel:    el('configPanel'),
-  configToggle:   el('configToggle'),
-  accessToken:    el('accessToken'),
-  toggleToken:    el('toggleToken'),
-  discoverPages:  el('discoverPages'),
-  pagesList:      el('pagesList'),
-  testConnection: el('testConnection'),
-  loadDemo:       el('loadDemo'),
-  dateFrom:       el('dateFrom'),
-  dateTo:         el('dateTo'),
-  fetchData:      el('fetchData'),
-  loadingOverlay: el('loadingOverlay'),
-  loadingText:    el('loadingText'),
-  toastContainer: el('toastContainer'),
-  statTotalPosts: el('statTotalPosts'),
-  statActivePages:el('statActivePages'),
-  statTopPage:    el('statTopPage'),
-  statDailyAvg:   el('statDailyAvg'),
-  statCollab:     el('statCollab'),
-  statsTableBody: el('statsTableBody'),
-  quickBtns:      document.querySelectorAll('.quick-btn'),
-  tabs:           document.querySelectorAll('.tab'),
-  panels:         document.querySelectorAll('.chart-panel'),
-  tableHeaders:   document.querySelectorAll('.stats-table th.sortable')
+  configPanel:         el('configPanel'),
+  configToggle:        el('configToggle'),
+  accessToken:         el('accessToken'),
+  toggleToken:         el('toggleToken'),
+  discoverPages:       el('discoverPages'),
+  pagesList:           el('pagesList'),
+  testConnection:      el('testConnection'),
+  tokenSetupView:      el('tokenSetupView'),
+  tokenConnectedView:  el('tokenConnectedView'),
+  tokenConnectedSub:   el('tokenConnectedSub'),
+  tokenStatusBadge:    el('tokenStatusBadge'),
+  editToken:           el('editToken'),
+  pageSelectorBar:     el('pageSelectorBar'),
+  dateFrom:            el('dateFrom'),
+  dateTo:              el('dateTo'),
+  fetchData:           el('fetchData'),
+  loadingOverlay:      el('loadingOverlay'),
+  loadingText:         el('loadingText'),
+  toastContainer:      el('toastContainer'),
+  statTotalPosts:      el('statTotalPosts'),
+  statActivePages:     el('statActivePages'),
+  statTopPage:         el('statTopPage'),
+  statDailyAvg:        el('statDailyAvg'),
+  statCollab:          el('statCollab'),
+  statsTableBody:      el('statsTableBody'),
+  quickBtns:           document.querySelectorAll('.quick-btn'),
+  tabs:                document.querySelectorAll('.tab'),
+  panels:              document.querySelectorAll('.chart-panel'),
+  tableHeaders:        document.querySelectorAll('.stats-table th.sortable')
 };
 
 const AZ_MONTHS  = ['Yan','Fev','Mar','Apr','May','İyn','İyl','Avq','Sen','Okt','Noy','Dek'];
@@ -74,36 +80,65 @@ function getPageColor(name, idx = 0) {
 
 // ─── Başlanğıc ───────────────────────────────────────────────────────────────
 function init() {
-  const savedToken = sessionStorage.getItem('meta_token');
-  if (savedToken) dom.accessToken.value = savedToken;
+  const savedToken = localStorage.getItem('meta_token');
 
-  const savedPages = sessionStorage.getItem('meta_managed_pages');
+  const savedPages = localStorage.getItem('meta_managed_pages');
   if (savedPages) {
     try {
       const pages = JSON.parse(savedPages);
       state.managedPages = pages;
-      pages.forEach(p => { if (p.ig_id) state.igIds[p.id] = p.ig_id; });
+      pages.forEach(p => {
+        if (p.ig_id)    state.igIds[p.id]    = p.ig_id;
+        if (p.photo)    state.pagePhotos[p.id] = p.photo;
+      });
       renderPagesList(pages, true);
+      renderPageChips();
     } catch { /* ignore */ }
+  }
+
+  if (savedToken) {
+    state.userToken = savedToken;
+    showTokenConnectedView(savedToken);
+  } else {
+    showTokenSetupView();
   }
 
   applyQuickRange(30);
   attachEventListeners();
 }
 
+function showTokenSetupView() {
+  dom.tokenSetupView.style.display     = 'block';
+  dom.tokenConnectedView.style.display = 'none';
+  dom.tokenStatusBadge.style.display   = 'none';
+  dom.configPanel.classList.remove('collapsed');
+}
+
+function showTokenConnectedView(token) {
+  dom.tokenSetupView.style.display     = 'none';
+  dom.tokenConnectedView.style.display = 'block';
+  dom.tokenStatusBadge.style.display   = 'inline-flex';
+  // Show first 8 chars of token for reference
+  const preview = token.length > 12 ? token.slice(0, 8) + '…' + token.slice(-4) : token;
+  if (dom.tokenConnectedSub) dom.tokenConnectedSub.textContent = `Token: ${preview}`;
+  dom.configPanel.classList.add('collapsed');
+}
+
 // ─── Hadisə Dinləyiciləri ────────────────────────────────────────────────────
 function attachEventListeners() {
   dom.configToggle.addEventListener('click', toggleConfigPanel);
 
-  // Light / Dark tema keçidi
   document.getElementById('themeToggle').addEventListener('click', toggleTheme);
   dom.toggleToken.addEventListener('click', handleToggleToken);
 
-  dom.accessToken.addEventListener('input', () => {
-    const v = dom.accessToken.value.trim();
-    v ? sessionStorage.setItem('meta_token', v)
-      : sessionStorage.removeItem('meta_token');
-    if (!v) resetPagesList();
+  dom.testConnection.addEventListener('click', handleTestAndDiscover);
+  dom.discoverPages.addEventListener('click', handleDiscoverPages);
+  dom.editToken.addEventListener('click', () => {
+    localStorage.removeItem('meta_token');
+    if (dom.accessToken) dom.accessToken.value = '';
+    resetPagesList();
+    renderPageChips();
+    showTokenSetupView();
   });
 
   dom.quickBtns.forEach(btn => {
@@ -120,9 +155,6 @@ function attachEventListeners() {
   dom.dateFrom.addEventListener('change', clearQuickActive);
   dom.dateTo.addEventListener('change', clearQuickActive);
 
-  dom.discoverPages.addEventListener('click', handleDiscoverPages);
-  dom.testConnection.addEventListener('click', handleTestAndDiscover);
-  dom.loadDemo.addEventListener('click', handleLoadDemo);
   dom.fetchData.addEventListener('click', handleFetchData);
 
   dom.tabs.forEach(tab => {
@@ -201,9 +233,8 @@ function setLoading(active, text = 'Məlumatlar yüklənir...') {
   dom.loadingOverlay.style.display = active ? 'flex' : 'none';
   dom.loadingText.textContent      = text;
   dom.fetchData.disabled           = active;
-  dom.testConnection.disabled      = active;
-  dom.loadDemo.disabled            = active;
-  dom.discoverPages.disabled       = active;
+  if (dom.testConnection) dom.testConnection.disabled = active;
+  if (dom.discoverPages)  dom.discoverPages.disabled  = active;
 }
 
 // ─── Bağlantı + Aşkar Et ─────────────────────────────────────────────────────
@@ -214,8 +245,12 @@ async function handleTestAndDiscover() {
   setLoading(true, 'Bağlantı yoxlanılır...');
   try {
     const me = await testApiConnection(token);
+    // Token keçərlidir — localStorage-a saxla
+    localStorage.setItem('meta_token', token);
+    state.userToken = token;
     showToast('Bağlantı Uğurlu', `Giriş edildi: ${me.name || me.id}`, 'success');
     await discoverAndRenderPages(token);
+    showTokenConnectedView(token);
   } catch (err) {
     showToast('Bağlantı Xətası', err instanceof ApiError ? err.toUserMessage() : err.message, 'error');
   } finally {
@@ -224,7 +259,7 @@ async function handleTestAndDiscover() {
 }
 
 async function handleDiscoverPages() {
-  const token = dom.accessToken.value.trim();
+  const token = state.userToken || localStorage.getItem('meta_token') || '';
   if (!token) { showToast('Xəta', 'Əvvəlcə token daxil edin', 'error'); return; }
   setLoading(true, 'Səhifələr aşkar edilir...');
   try {
@@ -243,13 +278,19 @@ async function discoverAndRenderPages(token) {
   pages.forEach(p => {
     if (p.access_token) state.pageTokens[p.id] = p.access_token;
     if (p.ig_id)        state.igIds[p.id]       = p.ig_id;
+    // Səhifə foto URL-i — chip-lərdə kiçik loqo kimi istifadə edilir
+    state.pagePhotos[p.id] = `https://graph.facebook.com/v20.0/${p.id}/picture?type=small&access_token=${token}`;
   });
 
   state.managedPages = pages;
-  sessionStorage.setItem('meta_managed_pages',
-    JSON.stringify(pages.map(({ id, name, ig_id }) => ({ id, name, ig_id }))));
+  localStorage.setItem('meta_managed_pages',
+    JSON.stringify(pages.map(({ id, name, ig_id }) => ({
+      id, name, ig_id,
+      photo: state.pagePhotos[id]
+    }))));
 
   renderPagesList(pages);
+  renderPageChips();
 
   const withIg    = pages.filter(p => p.ig_id).length;
   const withoutIg = pages.length - withIg;
@@ -262,8 +303,7 @@ async function discoverAndRenderPages(token) {
 
     // Meta Ads hesablarını al — paid data üçün (ads_read icazəsi lazımdır)
     setLoading(true, 'Meta Ads hesabları yüklənir...');
-    const token = dom.accessToken.value.trim();
-    state.userToken    = token;   // User token-i saxla — ads_read üçün lazımdır
+    state.userToken    = token;
     state.adAccountIds = await fetchAdAccounts(token).catch(() => []);
     if (state.adAccountIds.length > 0) {
       showToast('Məlumat', `${state.adAccountIds.length} reklam hesabı tapıldı`, 'info');
@@ -389,16 +429,60 @@ function syncSelectAll() {
   allCb.indeterminate = chkd.length > 0 && chkd.length < all.length;
 }
 
+// ─── Sticky Filterdəki Səhifə Chipləri ──────────────────────────────────────
+function renderPageChips() {
+  const bar = dom.pageSelectorBar;
+  if (!bar) return;
+
+  const pages = state.managedPages.filter(p => p.ig_id);
+  if (!pages.length) { bar.style.display = 'none'; return; }
+
+  bar.style.display = 'flex';
+  bar.innerHTML = `
+    <span class="page-chips-label">Səhifələr:</span>
+    <div class="page-chips-scroll">
+      ${pages.map(p => {
+        const photo = state.pagePhotos[p.id] || '';
+        const name  = safeText(p.name);
+        return `
+          <button class="page-chip active" data-page-id="${p.id}" type="button" title="${name}">
+            ${photo
+              ? `<img src="${photo}" class="page-chip-logo" alt="" onerror="this.style.display='none'">`
+              : ''}
+            <span class="page-chip-name">${name}</span>
+          </button>`;
+      }).join('')}
+    </div>
+  `;
+
+  bar.querySelectorAll('.page-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      chip.classList.toggle('active');
+      // Config panel-dəki checkbox-u da sinxronlaşdır
+      const cb = document.querySelector(`.page-check[value="${chip.dataset.pageId}"]`);
+      if (cb) { cb.checked = chip.classList.contains('active'); syncSelectAll(); }
+    });
+  });
+}
+
 function resetPagesList() {
   state.managedPages = [];
   state.pageTokens   = {};
   state.igIds        = {};
+  state.pagePhotos   = {};
   dom.pagesList.innerHTML = '';
   dom.pagesList.style.display = 'none';
-  sessionStorage.removeItem('meta_managed_pages');
+  if (dom.pageSelectorBar) dom.pageSelectorBar.style.display = 'none';
+  localStorage.removeItem('meta_managed_pages');
 }
 
 function getSelectedPages() {
+  // Sticky bar-da chip-lər varsa onların seçimini istifadə et
+  const chips = document.querySelectorAll('.page-chip');
+  if (chips.length) {
+    return Array.from(chips).filter(c => c.classList.contains('active')).map(c => c.dataset.pageId);
+  }
+  // Fallback: config panel-dəki checkboxlar
   return Array.from(document.querySelectorAll('.page-check:not(:disabled):checked')).map(cb => cb.value);
 }
 
@@ -410,7 +494,7 @@ function safeText(str) {
 
 // ─── Məlumat Yüklə (Instagram) ───────────────────────────────────────────────
 async function handleFetchData() {
-  const token = dom.accessToken.value.trim();
+  const token = state.userToken || localStorage.getItem('meta_token') || '';
   if (!token) {
     showToast('Xəta', 'Token daxil edin', 'error');
     dom.configPanel.classList.remove('collapsed');
@@ -454,7 +538,7 @@ async function handleFetchData() {
     for (const pageInfo of allIgPages) {
       const pageId    = pageInfo.id;
       const pageName  = pageInfo.name;
-      const pageToken = state.pageTokens[pageId] || token;
+      const pageToken = state.pageTokens[pageId] || token || state.userToken;
       const igId      = state.igIds[pageId] || pageInfo.ig_id;
       const isSelected = selectedIds.includes(pageId);
 
@@ -513,67 +597,6 @@ async function handleFetchData() {
   }
 }
 
-// ─── Demo Data (Instagram formatı) ───────────────────────────────────────────
-function handleLoadDemo() {
-  const demoPages = [
-    { id: 'demo_global',     name: '166 Global'           },
-    { id: 'demo_yuk',        name: '166 Yükdaşıma'        },
-    { id: 'demo_temiz',      name: '166 Təmizlik Xidməti' },
-    { id: 'demo_xalca',      name: '166 Xalça Yuma'       },
-    { id: 'demo_usta',       name: '166 Usta Xidməti'     },
-    { id: 'demo_transport',  name: '166 Transport'        },
-    { id: 'demo_tech',       name: '166 Tech'             },
-    { id: 'demo_avtocheck',  name: 'avtocheck.az'         },
-    { id: 'demo_bagban',     name: '166 Bağban'           },
-    { id: 'demo_evak',       name: 'Evakuasiya Az'        },
-  ];
-
-  // Realist Instagram tip paylanması + bəzi collab postlar
-  const pool = [
-    { type: 'reels',    is_collab: false },
-    { type: 'reels',    is_collab: false },
-    { type: 'reels',    is_collab: true  },  // collab reel
-    { type: 'carousel', is_collab: false },
-    { type: 'carousel', is_collab: true  },  // collab carousel
-    { type: 'photo',    is_collab: false },
-    { type: 'photo',    is_collab: false },
-    { type: 'photo',    is_collab: false },
-    { type: 'other',    is_collab: false },
-  ];
-
-  state.posts = {}; state.pageNames = {}; state.igIds = {};
-
-  const to = new Date(), from = new Date();
-  from.setMonth(from.getMonth() - 6);
-
-  demoPages.forEach(page => {
-    state.pageNames[page.id] = page.name;
-    const count = 30 + Math.floor(Math.random() * 60);
-    const posts = [];
-    for (let i = 0; i < count; i++) {
-      const d    = new Date(from.getTime() + Math.random() * (to - from));
-      const tmpl = pool[Math.floor(Math.random() * pool.length)];
-      posts.push({
-        id: `${page.id}_${i}`,
-        created_time: d.toISOString(),
-        ...tmpl,
-        collaborator_usernames: [],
-        like_count:     Math.floor(Math.random() * 800),
-        comments_count: Math.floor(Math.random() * 60),
-        permalink:      null,
-        thumb:          null   // Real API-da dolu olacaq
-      });
-    }
-    state.posts[page.id] = posts;
-  });
-
-  dom.dateFrom.value = toDateString(from);
-  dom.dateTo.value   = toDateString(to);
-  clearQuickActive();
-  updateUI(from, to);
-  showToast('Demo Data', `${demoPages.length} nümunə Instagram səhifəsi yükləndi`, 'info');
-  dom.configPanel.classList.add('collapsed');
-}
 
 // ─── UI Yeniləmə ─────────────────────────────────────────────────────────────
 function updateUI(from, to) {
@@ -907,11 +930,11 @@ function dismissToast(toast) {
 
 const ENG_PAGE_SIZE = 5;  // Eyni anda göstərilən post sayı
 
-const ENG = {              // Engagement bölməsinin öz vəziyyəti
-  all:     [],             // Bütün postlar, insights ilə zənginləşdirilmiş
-  shown:   ENG_PAGE_SIZE,
-  channel: 'total',        // 'total' | 'organic' | 'paid'
-  insights: {}             // { postId: { saved, shares, reach, paid_impressions } }
+const ENG = {
+  all:      [],
+  shown:    ENG_PAGE_SIZE,
+  channel:  'total',
+  insights: {}
 };
 
 const TYPE_ICON   = { reels: '🎬', carousel: '🖼️', photo: '📸', other: '📄' };
@@ -965,7 +988,7 @@ async function renderEngagementTable() {
   const top20  = ENG.all.slice(0, 20);
   const from   = new Date(dom.dateFrom.value + 'T00:00:00');
   const to     = new Date(dom.dateTo.value   + 'T23:59:59');
-  const uToken = state.userToken || dom.accessToken.value.trim();
+  const uToken = state.userToken || localStorage.getItem('meta_token') || '';
 
   // ── 1) Ads hesabları — boşdursa yenidən çək ─────────────────────────────
   if (state.adAccountIds.length === 0 && uToken) {
@@ -1189,36 +1212,22 @@ function _postCardHTML(post, i) {
     views:    T.views    - P.views,
   };
 
-  // Kanala görə hansi dəyərləri göstər
-  const V = ENG.channel === 'paid' ? P : ENG.channel === 'organic' ? O : T;
+  const V = T; // Həmişə ümumi dəyərləri göstər
 
-  let scoreVal, scoreLabel;
-  if (ENG.channel === 'paid') {
-    scoreVal   = post._paidScore || 0;
-    scoreLabel = 'Ödənişli Engagement';
-  } else if (ENG.channel === 'organic') {
-    scoreVal   = post._organicScore ?? (post._totalScore - (post._paidScore || 0));
-    scoreLabel = 'Organik Engagement';
-  } else {
-    scoreVal   = post._totalScore || post._baseScore;
-    scoreLabel = 'Ümumi Engagement';
-  }
+  const scoreVal   = post._totalScore || post._baseScore;
+  const scoreLabel = 'Engagement';
 
-  // Chip helper — Ümumi tabda altında "from ads" yazısı əlavə edilir
-  const mkChip = (cls, icon, val, paidVal) => {
-    const z   = val === 0 ? ' data-zero="1"' : '';
-    const sub = (ENG.channel === 'total' && paidVal > 0)
-      ? `<span class="chip-sub">${paidVal.toLocaleString()} from ads</span>` : '';
-    return `<span class="eng-chip ${cls}"${z}>${icon} ${val.toLocaleString()}${sub}</span>`;
+  const mkChip = (cls, icon, val) => {
+    const z = val === 0 ? ' data-zero="1"' : '';
+    return `<span class="eng-chip ${cls}"${z}>${icon} ${val.toLocaleString()}</span>`;
   };
 
-  // 5 metrik — həmişə göstərilir
   const chipsHtml = [
-    mkChip('likes',      '❤️',  V.likes,    P.likes),
-    mkChip('cmts',       '💬',  V.comments, P.comments),
-    mkChip('saves',      '🔖',  V.saves,    P.saves),
-    mkChip('shares',     '📤',  V.shares,   P.shares),
-    mkChip('views-chip', '👁',  V.views,    P.views),  // Baxış = reach
+    mkChip('likes',      '❤️',  V.likes),
+    mkChip('cmts',       '💬',  V.comments),
+    mkChip('saves',      '🔖',  V.saves),
+    mkChip('shares',     '📤',  V.shares),
+    mkChip('views-chip', '👁',  V.views),
   ].join('');
 
   // Hover-da görünən formula: 5 metrikin cəmi
@@ -1273,18 +1282,6 @@ function _postCardHTML(post, i) {
 
 // Event listenerlər — engagement bölməsi üçün
 function _attachEngEvents() {
-  // Channel tabs
-  document.querySelectorAll('.eng-tab').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.eng-tab').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      ENG.channel = btn.dataset.channel;
-      ENG.shown   = ENG_PAGE_SIZE;
-      _renderEngList();
-    });
-  });
-
-  // Daha çox
   const moreBtn = document.getElementById('engLoadMore');
   if (moreBtn) moreBtn.addEventListener('click', () => {
     ENG.shown += ENG_PAGE_SIZE;

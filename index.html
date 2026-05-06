@@ -62,13 +62,23 @@
           </svg>
           API Konfiqurasiyası
         </div>
-        <svg class="config-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <polyline points="18,15 12,9 6,15"/>
-        </svg>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="token-status-badge" id="tokenStatusBadge" style="display:none">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <polyline points="20,6 9,17 4,12"/>
+            </svg>
+            Bağlıdır
+          </span>
+          <svg class="config-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="18,15 12,9 6,15"/>
+          </svg>
+        </div>
       </div>
       <div class="config-body" id="configBody">
-        <div class="config-grid">
-          <div class="form-group">
+
+        <!-- Token giriş görünüşü (token yoxdursa) -->
+        <div id="tokenSetupView">
+          <div class="form-group" style="margin-bottom:16px">
             <label class="form-label" for="accessToken">
               User Access Token
               <span class="form-hint">Graph API Explorer → "Generate Access Token" (User Token)</span>
@@ -86,39 +96,55 @@
               </button>
             </div>
           </div>
-          <div class="form-group">
-            <label class="form-label">
-              Səhifələr
-              <span class="form-hint">Tokeni daxil edib "Aşkar Et" basın — hamısı avtomatik yüklənir</span>
-            </label>
-            <button class="btn btn-ghost" id="discoverPages" type="button" style="width:100%;justify-content:center;margin-bottom:10px">
+          <div class="config-actions">
+            <button class="btn btn-primary" id="testConnection" type="button">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
               </svg>
-              Səhifələrimi Aşkar Et
+              Bağlan və Aşkar Et
             </button>
-            <div class="pages-list" id="pagesList" style="display:none"></div>
           </div>
         </div>
-        <div class="config-actions">
-          <button class="btn btn-primary" id="testConnection" type="button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="22,12 18,12 15,21 9,3 6,12 2,12"/>
-            </svg>
-            Bağlantını Yoxla + Aşkar Et
-          </button>
-          <button class="btn btn-ghost" id="loadDemo" type="button">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="5,3 19,12 5,21 5,3"/>
-            </svg>
-            Demo Data
-          </button>
+
+        <!-- Bağlı görünüşü (token varsa) -->
+        <div id="tokenConnectedView" style="display:none">
+          <div class="token-connected-row">
+            <div class="token-connected-info">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20,6 9,17 4,12"/>
+              </svg>
+              <div>
+                <div class="token-connected-title">Bağlantı mövcuddur</div>
+                <div class="token-connected-sub" id="tokenConnectedSub">Token saxlanılıb</div>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" id="discoverPages" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="1,4 1,10 7,10"/>
+                  <path d="M3.51 15a9 9 0 1 0 .49-3.51"/>
+                </svg>
+                Səhifələri Yenilə
+              </button>
+              <button class="btn btn-ghost btn-sm" id="editToken" type="button">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+                Tokeni Dəyişdir
+              </button>
+            </div>
+          </div>
+          <div class="pages-list" id="pagesList" style="display:none;margin-top:14px"></div>
         </div>
+
       </div>
     </section>
 
-    <!-- Tarix Filtri -->
+    <!-- Tarix Filtri (Sticky) -->
     <section class="date-filter">
+      <!-- Səhifə Seçici — data yüklənəndən sonra JS tərəfindən doldurulur -->
+      <div class="page-selector-bar" id="pageSelectorBar" style="display:none"></div>
       <div class="quick-buttons">
         <button class="quick-btn" data-range="this-month" type="button">Bu ay</button>
         <button class="quick-btn" data-range="last-month" type="button">Keçən ay</button>
@@ -293,19 +319,11 @@
     <!-- Post Engagement Analizi -->
     <section class="eng-section" id="engagementSection" style="display:none">
 
-      <!-- Header + Filterlər -->
+      <!-- Header -->
       <div class="eng-header">
         <div class="eng-header-left">
           <h2 class="table-title">Post Analizi</h2>
           <span class="eng-insights-note" id="engInsightNote"></span>
-        </div>
-        <div class="eng-filters">
-          <!-- Marketing Channel tabs -->
-          <div class="eng-channel-tabs">
-            <button class="eng-tab active" data-channel="total">Ümumi</button>
-            <button class="eng-tab" data-channel="organic">Organik</button>
-            <button class="eng-tab" data-channel="paid">Ödənişli</button>
-          </div>
         </div>
       </div>
 
